@@ -387,6 +387,5 @@ export function reverse_softcap(a, b) {
 }
 
 export function unl(layer) {
-	if (Array.isArray(tmp.ma.canBeMastered)) if (player.ma.selectionActive&&tmp[layer].row<6&&!tmp.ma.canBeMastered.includes(layer)) return false;
 	return player[layer].unlocked;
 }

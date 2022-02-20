@@ -330,6 +330,7 @@ export function gameLoop(diff) {
 		if (diff > limit)
 			diff = limit
 	}
+
 	addTime(diff)
 	player.points = player.points.add(tmp.pointGen.times(diff)).max(0)
 

@@ -17,6 +17,7 @@ var getMapDefaultState = function (map) {
     global.canGenPoints = maps[map].canGenPoints
     global.getPointGen = maps[map].getPointGen
     global.getStartPoints = maps[map].getStartPoints
+    global.stateChangeTree = { tmp: {}, player: {} }
     global.funcs = {}
     global.tmp = {}
     global.temp = tmp
