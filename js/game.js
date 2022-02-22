@@ -219,7 +219,7 @@ export function doReset(layer, force = false) {
 	player.points = (row == 0 ? decimalZero : getStartPoints())
 
 	for (let x = row; x >= 0; x--) rowReset(x, layer)
-	for (r in OTHER_LAYERS) {
+	for (let r in OTHER_LAYERS) {
 		rowReset(r, layer)
 	}
 

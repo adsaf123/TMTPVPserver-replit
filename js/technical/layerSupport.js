@@ -32,17 +32,13 @@ export function updateHotkeys()
     }
 }
 
-export var ROW_LAYERS = {}
-export var TREE_LAYERS = {}
-export var OTHER_LAYERS = {}
-
 export var LAYERS = {}
 
 export function updateLayers(){
     LAYERS = Object.keys(layers);
-    ROW_LAYERS = {}
-    TREE_LAYERS = {}
-    OTHER_LAYERS = {}
+    global.ROW_LAYERS = {}
+    global.TREE_LAYERS = {}
+    global.OTHER_LAYERS = {}
     for (let layer in layers){
         setupLayer(layer)
     }
@@ -254,7 +250,7 @@ export function setRowCol(upgrades) {
     if (upgrades.rows && upgrades.cols) return
     let maxRow = 0
     let maxCol = 0
-    for (up in upgrades) {
+    for (let up in upgrades) {
         if (!isNaN(up)) {
             if (Math.floor(up/10) > maxRow) maxRow = Math.floor(up/10)
             if (up%10 > maxCol) maxCol = up%10
@@ -265,7 +261,7 @@ export function setRowCol(upgrades) {
 }
 
 export function someLayerUnlocked(row){
-    for (layer in ROW_LAYERS[row])
+    for (let layer in ROW_LAYERS[row])
         if (player[layer].unlocked)
             return true
     return false

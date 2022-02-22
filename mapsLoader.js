@@ -6,8 +6,8 @@ import { getStartPlayer } from "./js/utils/save.js"
 var loadMaps = function (maps) {
     let ret = {}
     for (const map in maps) {
-        const [layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints] = getMapDefaultState(map)
-        ret[map] = {layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints}
+        const [layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints, ROW_LAYERS, TREE_LAYERS, OTHER_LAYERS] = getMapDefaultState(map)
+        ret[map] = {layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints, ROW_LAYERS, TREE_LAYERS, OTHER_LAYERS}
     }
     return ret
 }
@@ -28,7 +28,7 @@ var getMapDefaultState = function (map) {
     setupTemp()
     updateTemp()
     updateTemp()
-    return [layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints]
+    return [layers, player, tmp, funcs, isEndgame, canGenPoints, getPointGen, getStartPoints, ROW_LAYERS, TREE_LAYERS, OTHER_LAYERS]
 }
 
 export { loadMaps }

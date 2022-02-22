@@ -1,5 +1,11 @@
 import { Server } from "socket.io"
 
+global.globalMessages = []
+global.runningGames = {}
+global.games = {}
+global.players = {}
+global.lastGameID = 0
+
 import Decimal from "break_eternity.js"
 import { loadMaps } from "./mapsLoader.js"
 import { maps } from "./js/maps.js"
@@ -57,14 +63,15 @@ function getRegExpFlags(regExp) {
 }
 
 const server = new Server(5000, {
-    cors: {    
-        origin: true, 
-        methods: ["GET", "POST"]  
+    cors: {
+        origin: true,
+        methods: ["GET", "POST"]
     }
 })
 
 server.on("connection", (socket) => {
     console.log(`${socket.id} socket connected`)
+
     socket.on(SERVERINFO.PLAYERSETNICK, (nick) => {
         setPlayerNick(socket.id, nick)
     })
@@ -89,11 +96,15 @@ server.on("connection", (socket) => {
     socket.on(SERVERINFO.PLAYERGETGAMEINFO, () => {
         socket.emit(SERVERINFO.SERVERSENDGAMEINFO, playerGetGameInfo(socket.id))
     })
-
+    socket.on(SERVERINFO.PLAYERSENDMESSAGE, (data, chat) => {
+        playerSendMessage(socket.id, data, chat)
+    })
+    socket.on(SERVERINFO.PLAYERGETCHAT, (chat) => {
+        socket.emit(SERVERINFO.SERVERSENDCHAT, getPlayerChat(socket.id, chat))
+    })
     socket.on("disconnect", () => {
         console.log(`socket ${socket.id} disconnected`)
         playerLeaveGame(socket.id)
-        
     })
 })
 
@@ -106,14 +117,12 @@ const SERVERINFO = {
     PLAYERDOSOMETHING: "playerDoSomething",
     PLAYERGETGAMESLIST: "playerGetGamesList",
     SERVERSENDGAMESLIST: "serverSendGamesList",
-    PLAYERGETGAMEINFO: "playerGetGameInfo",
     SERVERSENDGAMEINFO: "serverSendGameInfo",
+    PLAYERGETGAMEINFO: "playerGetGameInfo",
+    PLAYERGETCHAT: "playerGetChat",
+    SERVERSENDCHAT: "serverSendChat",
+    PLAYERSENDMESSAGE: "playerSendMessage"
 }
-
-var runningGames = {}
-var games = {}
-var players = {}
-var lastGameID = 0
 
 var loadedMaps = loadMaps(maps)
 global.maxRow = 10 // <- quick fix
@@ -126,20 +135,20 @@ var playerLeaveGame = function (playerID) {
     let game = playerGetGameInfo(playerID)
     if (game.id) return //player is not in game
     if (game.playerID) {
-        game.gameState.players = game.gameState.players.filter(id => id.ip != playerID)
-        if (game.gameState.players.length == 0) {
+        runningGames[players[playerID].game].players = runningGames[players[playerID].game].players.filter(id => id.ip != playerID)
+        if (runningGames[players[playerID].game].players.length == 0) {
             delete runningGames[players[playerID].game]
             console.log(`running game of player ${playerID} empty, deleting`)
         }
         return
-    } 
-    game.players = game.players.filter(id => id.ip != playerID)
-    if (game.players.length == 0) { 
+    }
+    games[players[playerID].game] = games[players[playerID].game].filter(id => id.ip != playerID)
+    if (games[players[playerID].game].length == 0) {
         delete games[players[playerID].game]
         console.log(`game of player ${playerID} empty, deleting`)
     }
-    return 
-    
+    return
+
 }
 
 var beginGame = function (gameID) {
@@ -157,15 +166,16 @@ var loadGameState = function (gameID) {
     runningGames[gameID].layers = clone(loadedMaps[runningGames[gameID].tree].layers)
     runningGames[gameID].playersStates = {}
     runningGames[gameID].playersTmps = {}
-    runningGames[gameID].stateChangeTree = {}
     runningGames[gameID].getPointGen = loadedMaps[runningGames[gameID].tree].getPointGen
     runningGames[gameID].isEndgame = loadedMaps[runningGames[gameID].tree].isEndgame
     runningGames[gameID].canGenPoints = loadedMaps[runningGames[gameID].tree].canGenPoints
     runningGames[gameID].getStartPoints = loadedMaps[runningGames[gameID].tree].getStartPoints
+    runningGames[gameID].TREE_LAYERS = clone(loadedMaps[runningGames[gameID].tree].TREE_LAYERS)
+    runningGames[gameID].ROW_LAYERS = clone(loadedMaps[runningGames[gameID].tree].ROW_LAYERS)
+    runningGames[gameID].OTHER_LAYERS = clone(loadedMaps[runningGames[gameID].tree].OTHER_LAYERS)
     for (const player of runningGames[gameID].players) {
         runningGames[gameID].playersTmps[player.ip] = clone(loadedMaps[runningGames[gameID].tree].tmp)
         runningGames[gameID].playersStates[player.ip] = clone(loadedMaps[runningGames[gameID].tree].player)
-        runningGames[gameID].stateChangeTree[player.ip] = { tmp: {}, player: {} }
         runningGames[gameID].playersStates[player.ip].points = runningGames[gameID].getStartPoints()
     }
 }
@@ -201,6 +211,7 @@ var playerHostGame = function (playerID, gameInfo) {
         players: [],
         maxPlayers: Math.max(1, gameInfo.maxPlayers),
         tree: gameInfo.tree,
+        messages: []
     }
     lastGameID++
     games[lastGameID] = game
@@ -220,7 +231,7 @@ var playerGetGameInfo = function (playerID) {
             playerID: playerID,
             gameState: {
                 players: runningGames[players[playerID].game].players,
-                playersStates: runningGames[players[playerID].game].stateChangeTree,
+                playersStates: runningGames[players[playerID].game].playersStates,
                 tree: runningGames[players[playerID].game].tree
             }
         }
@@ -235,7 +246,7 @@ var getTMTfunction = function (name) {
 
 var playerDoSomething = function (playerID, what) {
     let gameID = players[playerID].game
-
+    global.playerID = playerID
     global.player = runningGames[gameID].playersStates[playerID]
     global.tmp = runningGames[gameID].playersTmps[playerID]
     global.temp = tmp
@@ -245,9 +256,32 @@ var playerDoSomething = function (playerID, what) {
     global.getStartPoints = runningGames[gameID].getStartPoints
     global.getPointGen = runningGames[gameID].getPointGen
     global.canGenPoints = runningGames[gameID].canGenPoints
+    global.TREE_LAYERS = runningGames[gameID].TREE_LAYERS
+    global.ROW_LAYERS = runningGames[gameID].ROW_LAYERS
+    global.OTHER_LAYERS = runningGames[gameID].OTHER_LAYERS
 
     getTMTfunction(what.name)(what.layer, what.id)
 
+}
+
+var playerSendMessage = function (playerID, data, chat) {
+    if (data.length > 256) return 
+    chat = getPlayerChat(playerID, chat)
+    chat.push({ player: players[playerID].nick, message: data })
+    if (chat.length > 100) {
+        chat = chat.splice(chat.length - 100)
+    }
+}
+
+var getPlayerChat = function (playerID, chat) {
+    let what = []
+    if (chat == "global") what = globalMessages
+    else if (chat == "lobby") {
+        if (players[playerID]?.game == undefined) what = []
+        else if (games[players[playerID]?.game] == undefined) what = runningGames[players[playerID].game].messages
+        else what = games[players[playerID].game].messages
+    }
+    return what
 }
 
 global.unl = function (layer) { // <- QUICKFIX
@@ -262,9 +296,10 @@ var interval = setInterval(function () {
 
     for (const gameID in runningGames) {
         for (const playerID in runningGames[gameID].playersStates) {
+            global.gameID = gameID
+            global.playerID = playerID
             global.player = runningGames[gameID].playersStates[playerID]
             global.tmp = runningGames[gameID].playersTmps[playerID]
-            global.stateChangeTree = { tmp: {}, player: global.player }
             global.temp = tmp
             global.layers = runningGames[gameID].layers
             global.funcs = runningGames[gameID].funcs
@@ -272,6 +307,9 @@ var interval = setInterval(function () {
             global.getStartPoints = runningGames[gameID].getStartPoints
             global.getPointGen = runningGames[gameID].getPointGen
             global.canGenPoints = runningGames[gameID].canGenPoints
+            global.TREE_LAYERS = runningGames[gameID].TREE_LAYERS
+            global.ROW_LAYERS = runningGames[gameID].ROW_LAYERS
+            global.OTHER_LAYERS = runningGames[gameID].OTHER_LAYERS
 
             let now = Date.now()
             let diff = ((now - player.time) / 1e3) * 10 // <- to not make "idle" game
@@ -280,8 +318,6 @@ var interval = setInterval(function () {
             updateTemp()
             gameLoop(diff)
 
-            runningGames[gameID].stateChangeTree[playerID] = global.stateChangeTree
-
             if (tmp.gameEnded)
                 runningGames[gameID].winners.push(playerID)
         }
@@ -289,4 +325,3 @@ var interval = setInterval(function () {
 
     ticking = false
 }, 50)
-

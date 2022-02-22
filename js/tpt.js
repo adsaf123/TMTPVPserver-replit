@@ -1,5 +1,33 @@
 import Decimal from "break_eternity.js"
 
+var halfPlayerResource = function (player, layer) {
+    global.runningGames[players[player].game].playersStates[player][layer].points = global.runningGames[players[player].game].playersStates[player][layer].points.div(2).ceil()
+}
+
+var generatePlayerSelectClickables = function () {
+    var clickables = {}
+    if (runningGames[global?.gameID]?.players == undefined) return
+    for (const item in runningGames[global?.gameID]?.playersStates) {
+        clickables[`s${item}`] = {}
+        clickables[`s${item}`].id = `s${item}`
+        clickables[`s${item}`].layer = "spells"
+        clickables[`s${item}`].unlocked = function () { return true }
+        clickables[`s${item}`].display = function () { return "select" }
+        clickables[`s${item}`].canClick = function () { return player.spells.selectedPlayer != item && player.spells.s1time == 0 }
+        clickables[`s${item}`].onClick = function () { player.spells.selectedPlayer = item }
+    }
+    for (const item of ["p", "g", "b", "s", "t", "e"]) {
+        clickables[`sl${item}`] = {}
+        clickables[`sl${item}`].id = `sl${item}`
+        clickables[`sl${item}`].layer = "spells"
+        clickables[`sl${item}`].unlocked = function () { return true }
+        clickables[`sl${item}`].display = function () { return `select ${item}` }
+        clickables[`sl${item}`].canClick = function () { return player.spells.selectedLayer != item}
+        clickables[`sl${item}`].onClick = function () { player.spells.selectedLayer = item }
+    }
+    return clickables
+}
+
 const tpt = {
     layers: {
         "p": {
@@ -39,7 +67,7 @@ const tpt = {
                 { key: "p", description: "Press P to Prestige.", onPress() { if (canReset(this.layer)) doReset(this.layer) } },
             ],
             layerShown() { return true },
-            passiveGeneration() { return (hasMilestone("g", 1) && player.ma.current != "p") ? 1 : 0 },
+            passiveGeneration() { return (hasMilestone("g", 1)) ? 1 : 0 },
             doReset(resettingLayer) {
                 let keep = [];
                 if (hasMilestone("b", 0) && resettingLayer == "b") keep.push("upgrades")
@@ -177,7 +205,7 @@ const tpt = {
             ],
             layerShown() { return player.p.unlocked },
             automate() { },
-            resetsNothing() { return hasMilestone("t", 4) && player.ma.current != "b" },
+            resetsNothing() { return hasMilestone("t", 4) },
             addToBase() {
                 let base = new Decimal(0);
                 if (hasUpgrade("b", 12)) base = base.plus(upgradeEffect("b", 12));
@@ -1690,9 +1718,62 @@ const tpt = {
                 "achievements",
             ],
             update(diff) {	// Added this section to call adjustNotificationTime every tick, to reduce notification timers
-                adjustNotificationTime(diff);
+                //adjustNotificationTime(diff);
             },
         },
+
+        "spells": {
+            type: "none",
+            row: "side",
+            color: "#FF1493",
+
+            startData() {
+                return {
+                    unlocked: true,
+                    mana: 0,
+                    points: new Decimal(0),
+                    selectedPlayer: undefined,
+                    selectedLayer: undefined,
+                    s1time: 0,
+                    s3time: 0,
+                }
+            },
+
+            update(diff) {
+                player.spells.mana += diff * 0.1
+                player.spells.mana = Math.min(player.spells.mana, 100) 
+
+                player.spells.s1time = Math.max(0, player.spells.s1time - diff)
+                player.spells.s3time = Math.max(0, player.spells.s3time - diff)
+            },
+            clickables: generatePlayerSelectClickables,
+            buyables: {
+                "s1": {
+                    display: "Spend 25 mana to see other player ALL resources for 5 secs (locks selecting players)",
+                    canAfford() { return player.spells.mana >= 25 },
+                    buy() {
+                        player.spells.mana -= 25
+                        player.spells.s1time = 50
+                    }
+                },
+                "s2": {
+                    display: "Spend 90 mana to half one selected resource of another player (rounds up)",
+                    canAfford() { return player.spells.mana >= 90 },
+                    buy() {
+                        player.spells.mana -= 90
+                        halfPlayerResource(player.spells.selectedPlayer, player.spells.selectedLayer)
+                    }
+                },
+                "s3": {
+                    display: "Spend 50 mana to boost point gain x3 for 10 secs (locks selecting players)",
+                    canAfford() { return player.spells.mana >= 50 },
+                    buy() {
+                        player.spells.mana -= 50
+                        player.spells.s3time = 100
+                    }
+                }
+            }
+        }
     },
     getStartPoints() { return new Decimal(10) },
     canGenPoints() { return hasUpgrade("p", 11) },
@@ -1710,6 +1791,8 @@ const tpt = {
         if (player.g.unlocked) gain = gain.times(tmp.g.powerEff);
         if (player.t.unlocked) gain = gain.times(tmp.t.enEff);
         if (player.s.unlocked) gain = gain.times(buyableEffect("s", 11));
+
+        if (player.spells.s3time > 0) gain = gain.times(3)
 
         return gain
     },

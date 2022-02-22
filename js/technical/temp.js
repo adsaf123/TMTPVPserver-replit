@@ -100,8 +100,7 @@ export function updateTemp() {
 		setupTemp()
 	}
 
-	updateTempData(layers, tmp, funcs, stateChangeTree.tmp)
-	cleanStateTree(stateChangeTree.tmp)
+	updateTempData(layers, tmp, funcs)
 
 	for (let layer in layers) {
 		tmp[layer].resetGain = getResetGain(layer)
@@ -119,37 +118,33 @@ export function updateTemp() {
 
 }
 
-export function cleanStateTree(tree) {
-	let props = 0
-	for (let item in tree) {
-		props++
-		if (typeof tree[item] == "object" && !(tree[item] instanceof Decimal)) {
-			if (cleanStateTree(tree[item]) == 0) {
-				delete tree[item]
-				props--
-			}
-		}
-	}
-	return props
-}
-
-export function updateTempData(layerData, tmpData, funcsData, stateTree, useThis) {
+export function updateTempData(layerData, tmpData, funcsData, useThis) {
 	for (let item in funcsData) {
-		stateTree[item] = {}
 		if (Array.isArray(layerData[item])) {
 			if (item !== "tabFormat" && item !== "content") // These are only updated when needed
-				updateTempData(layerData[item], tmpData[item], funcsData[item], stateTree[item], useThis)
+				updateTempData(layerData[item], tmpData[item], funcsData[item], useThis)
 		}
 		else if ((!!layerData[item]) && (layerData[item].constructor === Object) || (typeof layerData[item] === "object") && traversableClasses.includes(layerData[item].constructor.name)) {
-			updateTempData(layerData[item], tmpData[item], funcsData[item], stateTree[item], useThis)
+			updateTempData(layerData[item], tmpData[item], funcsData[item], useThis)
 		}
 		else if (isFunction(layerData[item]) && !isFunction(tmpData[item])) {
 			let value
 
 			if (useThis !== undefined) value = layerData[item].bind(useThis)()
 			else value = layerData[item]()
-			if (tmpData[item] != value) stateTree[item] = layerData[item]()
 			tmpData[item] = value
+
+			if (["clickables", "buyables"].includes(item)) {
+				for (let i in value) {
+					layerData[item][i] = value[i]
+					if (isPlainObject(layerData[item][i])){
+						layerData[item][i]["id"] = i
+						layerData[item][i]["layer"] = layerData.layer
+						if (layerData[item][i].unlocked === undefined)
+							layerData[item][i]["unlocked"] = true
+					}
+				}
+			}
 		}
 	}
 }
